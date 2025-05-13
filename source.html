@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glowing Heart</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        #canvas-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            position: relative;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.8.0/lib/p5.js"></script>
+
+<base target="_self">
+
+
+    <div id="canvas-container"></div>
+
+    <script>
+        const sketch = (p) => {
+            let heartSize;
+            let beatPhase = 0;
+            let particles = [];
+            let isHovering = false;
+            let glowIntensity = 0;
+            let baseColor;
+            let hoverColor;
+            let currentColor;
+            let lastMouseX = 0;
+            let lastMouseY = 0;
+            let mouseVelocity = p.createVector(0, 0);
+            let canvas;
+
+            p.setup = () => {
+                canvas = p.createCanvas(p.min(p.windowWidth, 1200), p.min(p.windowHeight, 800));
+                canvas.parent('canvas-container');
+                p.colorMode(p.HSB, 360, 100, 100, 1);
+                p.noStroke();
+                
+                baseColor = p.color(340, 80, 90);
+                hoverColor = p.color(10, 80, 90);
+                currentColor = p.color(baseColor);
+                
+                heartSize = p.min(p.width, p.height) * 0.3;
+            };
+
+            p.draw = () => {
+                p.background(0, 0, 10, 0.1);
+                
+                // Calculate mouse velocity for particle direction
+                if (p.frameCount > 1) {
+                    mouseVelocity = p.createVector(p.mouseX - lastMouseX, p.mouseY - lastMouseY).mult(0.5);
+                }
+                lastMouseX = p.mouseX;
+                lastMouseY = p.mouseY;
+                
+                // Update beat phase
+                beatPhase += 0.02;
+                const beatFactor = 1 + p.sin(beatPhase) * 0.05;
+                
+                // Check if mouse is hovering over heart
+                const heartCenterX = p.width/2;
+                const heartCenterY = p.height/2;
+                const distToHeart = p.dist(p.mouseX, p.mouseY, heartCenterX, heartCenterY);
+                isHovering = distToHeart < heartSize * 0.6 * beatFactor;
+                
+                // Update glow intensity
+                glowIntensity = p.lerp(glowIntensity, isHovering ? 1 : 0.3, 0.1);
+                
+                // Update heart color
+                currentColor = p.lerpColor(currentColor, isHovering ? hoverColor : baseColor, 0.1);
+                
+                // Draw the main heart
+                drawHeart(heartCenterX, heartCenterY, heartSize * beatFactor, currentColor, glowIntensity);
+                
+                // Create particles when hovering
+                if (isHovering && p.frameCount % 3 === 0) {
+                    createParticles(heartCenterX, heartCenterY, heartSize * beatFactor * 0.5);
+                }
+                
+                // Update and draw particles
+                updateParticles();
+                
+                // Limit particle count
+                if (particles.length > 500) {
+                    particles = particles.slice(particles.length - 500);
+                }
+            };
+
+            function drawHeart(x, y, size, col, glow) {
+                p.push();
+                p.translate(x, y);
+                
+                // Glow effect
+                for (let i = 0; i < 5; i++) {
+                    const glowSize = size * (1 + i * 0.1 * glow);
+                    const alpha = 0.2 - i * 0.04;
+                    p.fill(p.hue(col), p.saturation(col) * 0.8, p.brightness(col), alpha);
+                    drawHeartShape(0, 0, glowSize);
+                }
+                
+                // Main heart
+                p.fill(col);
+                drawHeartShape(0, 0, size);
+                
+                p.pop();
+            }
+
+            function drawHeartShape(x, y, size) {
+                p.beginShape();
+                for (let angle = 0; angle < p.TWO_PI; angle += 0.01) {
+                    const heartX = x + (16 * p.pow(p.sin(angle), 3)) * size * 0.03;
+                    const heartY = y - (13 * p.cos(angle) - 5 * p.cos(2*angle) - 2 * p.cos(3*angle) - p.cos(4*angle)) * size * 0.03;
+                    p.vertex(heartX, heartY);
+                }
+                p.endShape(p.CLOSE);
+            }
+
+            function createParticles(x, y, size) {
+                const particleCount = p.floor(p.random(1, 3));
+                for (let i = 0; i < particleCount; i++) {
+                    const angle = p.random(p.TWO_PI);
+                    const distance = p.random(size * 0.3, size * 0.6);
+                    const px = x + p.cos(angle) * distance;
+                    const py = y + p.sin(angle) * distance;
+                    
+                    const vel = mouseVelocity.copy().add(p5.Vector.random2D().mult(0.5));
+                    const hue = p.hue(currentColor) + p.random(-20, 20);
+                    
+                    particles.push({
+                        x: px,
+                        y: py,
+                        size: p.random(5, 15),
+                        color: p.color(hue, 80, 90, 1),
+                        velocity: vel,
+                        life: 100,
+                        maxLife: p.random(60, 120),
+                        rotation: p.random(p.TWO_PI),
+                        rotationSpeed: p.random(-0.05, 0.05)
+                    });
+                }
+            }
+
+            function updateParticles() {
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const particle = particles[i];
+                    
+                    // Update position
+                    particle.x += particle.velocity.x;
+                    particle.y += particle.velocity.y;
+                    
+                    // Apply gravity and drag
+                    particle.velocity.y += 0.05;
+                    particle.velocity.mult(0.98);
+                    
+                    // Update rotation
+                    particle.rotation += particle.rotationSpeed;
+                    
+                    // Update life
+                    particle.life--;
+                    
+                    // Draw particle
+                    p.push();
+                    p.translate(particle.x, particle.y);
+                    p.rotate(particle.rotation);
+                    
+                    const alpha = p.map(particle.life, 0, particle.maxLife, 0, 1);
+                    p.fill(p.hue(particle.color), p.saturation(particle.color), p.brightness(particle.color), alpha);
+                    
+                    // Draw tiny heart particle
+                    p.beginShape();
+                    for (let angle = 0; angle < p.TWO_PI; angle += 0.5) {
+                        const heartX = (16 * p.pow(p.sin(angle), 3)) * particle.size * 0.03;
+                        const heartY = (13 * p.cos(angle) - 5 * p.cos(2*angle) - 2 * p.cos(3*angle) - p.cos(4*angle)) * particle.size * 0.03;
+                        p.vertex(heartX, heartY);
+                    }
+                    p.endShape(p.CLOSE);
+                    
+                    p.pop();
+                    
+                    // Remove dead particles
+                    if (particle.life <= 0) {
+                        particles.splice(i, 1);
+                    }
+                }
+            }
+
+            p.windowResized = () => {
+                p.resizeCanvas(p.min(p.windowWidth, 1200), p.min(p.windowHeight, 800));
+                heartSize = p.min(p.width, p.height) * 0.3;
+            };
+
+            p.mouseMoved = () => {
+                // Additional particles when moving mouse over heart
+                if (isHovering && p.frameCount % 5 === 0) {
+                    createParticles(p.width/2, p.height/2, heartSize * (1 + p.sin(beatPhase) * 0.05) * 0.5);
+                }
+            };
+        };
+
+        new p5(sketch);
+    </script>
+
+              
+          
+                
+          
+              
